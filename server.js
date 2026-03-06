@@ -18,12 +18,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-/* -------------------- Middleware -------------------- */
-
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
-
 /* -------------------- Health Routes -------------------- */
 
 app.get("/", (req, res) => {
@@ -58,20 +52,24 @@ function withTimeout(promise, ms, label) {
 
 app.post(["/send-emails", "/send-email"], async (req, res) => {
   const routeStart = Date.now();
+
   const { emails, subject, html } = req.body;
+
   const recipients = Array.isArray(emails)
     ? emails.map((email) => String(email).trim()).filter(Boolean)
     : [];
 
-    /* Validate ENV */
+  /* Validate ENV */
+
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     return res.status(500).json({
       success: false,
-      message: "Missing EMAIL_USER or EMAIL_PASS in .env"
+      message: "Missing EMAIL_USER or EMAIL_PASS environment variables"
     });
   }
 
-   /* Validate Request */
+  /* Validate Request */
+
   if (!recipients.length || !subject || !html) {
     return res.status(400).json({
       success: false,
@@ -82,13 +80,14 @@ app.post(["/send-emails", "/send-email"], async (req, res) => {
   if (recipients.length > 25) {
     return res.status(400).json({
       success: false,
-      message: "Maximum 25 recipients per request"
+      message: "Maximum 25 recipients allowed per request"
     });
   }
 
   try {
 
-        /* Create Transporter */
+    /* Create Transporter */
+
     const transporter = nodemailer.createTransport({
       service: "gmail",
       connectionTimeout: 5000,
@@ -100,7 +99,8 @@ app.post(["/send-emails", "/send-email"], async (req, res) => {
       }
     });
 
-    /*--------------------- Send Emails ---------------------*/
+    /* Send Emails */
+
     const sendJobs = recipients.map((email) =>
       withTimeout(
         transporter.sendMail({
@@ -113,26 +113,33 @@ app.post(["/send-emails", "/send-email"], async (req, res) => {
         `Send to ${email}`
       )
     );
+
     await withTimeout(Promise.all(sendJobs), 15000, "Bulk send");
 
     res.json({
       success: true,
       message: "Emails sent successfully",
+      recipients: recipients.length,
       durationMs: Date.now() - routeStart
     });
 
   } catch (error) {
-    console.log(error);
+
+    console.error("Email Error:", error);
+
     res.status(500).json({
       success: false,
       message: error?.message || "Email sending failed",
       durationMs: Date.now() - routeStart
     });
+
   }
 });
+
 /* -------------------- Start Server -------------------- */
 
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
