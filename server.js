@@ -11,9 +11,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+/* -------------------- Middleware -------------------- */
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+
+/* -------------------- Middleware -------------------- */
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+/* -------------------- Health Routes -------------------- */
+
+app.get("/", (req, res) => {
+  res.send("Email Sender API Running 🚀");
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+/* -------------------- Timeout Helper -------------------- */
 
 function withTimeout(promise, ms, label) {
   return new Promise((resolve, reject) => {
@@ -33,12 +54,16 @@ function withTimeout(promise, ms, label) {
   });
 }
 
+/* -------------------- Email Route -------------------- */
+
 app.post(["/send-emails", "/send-email"], async (req, res) => {
+  const routeStart = Date.now();
   const { emails, subject, html } = req.body;
   const recipients = Array.isArray(emails)
     ? emails.map((email) => String(email).trim()).filter(Boolean)
     : [];
 
+    /* Validate ENV */
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     return res.status(500).json({
       success: false,
@@ -46,6 +71,7 @@ app.post(["/send-emails", "/send-email"], async (req, res) => {
     });
   }
 
+   /* Validate Request */
   if (!recipients.length || !subject || !html) {
     return res.status(400).json({
       success: false,
@@ -53,46 +79,58 @@ app.post(["/send-emails", "/send-email"], async (req, res) => {
     });
   }
 
+  if (recipients.length > 25) {
+    return res.status(400).json({
+      success: false,
+      message: "Maximum 25 recipients per request"
+    });
+  }
+
   try {
+
+        /* Create Transporter */
     const transporter = nodemailer.createTransport({
       service: "gmail",
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 20000,
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
       }
     });
 
-    await withTimeout(transporter.verify(), 15000, "SMTP connection");
-
-    for (const email of recipients) {
-      await withTimeout(
+    /*--------------------- Send Emails ---------------------*/
+    const sendJobs = recipients.map((email) =>
+      withTimeout(
         transporter.sendMail({
           from: process.env.EMAIL_USER,
           to: email,
           subject,
           html
         }),
-        20000,
+        12000,
         `Send to ${email}`
-      );
-    }
+      )
+    );
+    await withTimeout(Promise.all(sendJobs), 15000, "Bulk send");
 
     res.json({
       success: true,
-      message: "Emails sent successfully"
+      message: "Emails sent successfully",
+      durationMs: Date.now() - routeStart
     });
 
   } catch (error) {
     console.log(error);
     res.status(500).json({
       success: false,
-      message: error?.message || "Email sending failed"
+      message: error?.message || "Email sending failed",
+      durationMs: Date.now() - routeStart
     });
   }
 });
+/* -------------------- Start Server -------------------- */
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
