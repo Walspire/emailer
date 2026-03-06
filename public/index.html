@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Email Sender Tool</title>
+<style>
+body{
+font-family:Arial;
+max-width:700px;
+margin:auto;
+padding:40px;
+}
+
+textarea,input{
+width:100%;
+margin-bottom:15px;
+padding:10px;
+}
+
+button{
+background:#ff3520;
+color:white;
+border:none;
+padding:12px 20px;
+cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Bulk Email Sender</h2>
+
+<label>Client Emails (comma separated)</label>
+<textarea id="emails"></textarea>
+
+<label>Subject</label>
+<input type="text" id="subject">
+
+<label>HTML Email Template</label>
+<textarea id="html"></textarea>
+
+<button onclick="sendEmail()">Send Emails</button>
+
+<script>
+
+async function sendEmail(){
+
+const emails=document.getElementById("emails").value
+  .split(",")
+  .map(email => email.trim())
+  .filter(Boolean);
+const subject=document.getElementById("subject").value;
+const html=document.getElementById("html").value;
+
+try {
+const response=await fetch("/send-emails",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+emails,
+subject,
+html
+})
+});
+
+const data=await response.json();
+if(!response.ok){
+throw new Error(data.message || "Request failed");
+}
+alert(data.message);
+} catch(error){
+alert(error.message || "Unable to send emails");
+}
+
+}
+
+</script>
+
+</body>
+</html>
