@@ -39,11 +39,14 @@ cursor:pointer;
 <label>HTML Email Template</label>
 <textarea id="html"></textarea>
 
-<button onclick="sendEmail()">Send Emails</button>
+<button id="sendBtn" onclick="sendEmail()">Send Emails</button>
 
 <script>
 
 async function sendEmail(){
+const sendBtn=document.getElementById("sendBtn");
+sendBtn.disabled=true;
+sendBtn.textContent="Sending...";
 
 const emails=document.getElementById("emails").value
   .split(",")
@@ -53,17 +56,22 @@ const subject=document.getElementById("subject").value;
 const html=document.getElementById("html").value;
 
 try {
+const controller=new AbortController();
+const timeoutId=setTimeout(() => controller.abort(), 30000);
+
 const response=await fetch("/send-emails",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
 },
+signal:controller.signal,
 body:JSON.stringify({
 emails,
 subject,
 html
 })
 });
+clearTimeout(timeoutId);
 
 const data=await response.json();
 if(!response.ok){
@@ -71,7 +79,14 @@ throw new Error(data.message || "Request failed");
 }
 alert(data.message);
 } catch(error){
+if(error.name === "AbortError"){
+alert("Request timed out. Check Railway logs for SMTP issue.");
+} else {
 alert(error.message || "Unable to send emails");
+}
+} finally {
+sendBtn.disabled=false;
+sendBtn.textContent="Send Emails";
 }
 
 }

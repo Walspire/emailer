@@ -15,6 +15,24 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 app.post(["/send-emails", "/send-email"], async (req, res) => {
   const { emails, subject, html } = req.body;
   const recipients = Array.isArray(emails)
@@ -38,19 +56,28 @@ app.post(["/send-emails", "/send-email"], async (req, res) => {
   try {
     const transporter = nodemailer.createTransport({
       service: "gmail",
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
       }
     });
 
+    await withTimeout(transporter.verify(), 15000, "SMTP connection");
+
     for (const email of recipients) {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject,
-        html
-      });
+      await withTimeout(
+        transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject,
+          html
+        }),
+        20000,
+        `Send to ${email}`
+      );
     }
 
     res.json({
@@ -62,7 +89,7 @@ app.post(["/send-emails", "/send-email"], async (req, res) => {
     console.log(error);
     res.status(500).json({
       success: false,
-      message: "Email sending failed"
+      message: error?.message || "Email sending failed"
     });
   }
 });
