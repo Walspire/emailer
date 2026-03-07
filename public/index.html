@@ -1,97 +1,94 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-<title>Email Sender Tool</title>
-<style>
-body{
-font-family:Arial;
-max-width:700px;
-margin:auto;
-padding:40px;
-}
+  <head>
+    <title>Email Sender Tool</title>
+    <style>
+      body {
+        font-family: Arial;
+        max-width: 700px;
+        margin: auto;
+        padding: 40px;
+      }
 
-textarea,input{
-width:100%;
-margin-bottom:15px;
-padding:10px;
-}
+      textarea,
+      input {
+        width: 100%;
+        margin-bottom: 15px;
+        padding: 10px;
+      }
 
-button{
-background:#ff3520;
-color:white;
-border:none;
-padding:12px 20px;
-cursor:pointer;
-}
-</style>
-</head>
+      button {
+        background: #ff3520;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
 
-<body>
+  <body>
+    <h2>Bulk Email Sender</h2>
 
-<h2>Bulk Email Sender</h2>
+    <label>Client Emails (comma separated)</label>
+    <textarea id="emails"></textarea>
 
-<label>Client Emails (comma separated)</label>
-<textarea id="emails"></textarea>
+    <label>Subject</label>
+    <input type="text" id="subject" />
 
-<label>Subject</label>
-<input type="text" id="subject">
+    <label>HTML Email Template</label>
+    <textarea id="html"></textarea>
 
-<label>HTML Email Template</label>
-<textarea id="html"></textarea>
+    <button id="sendBtn" onclick="sendEmail()">Send Emails</button>
 
-<button id="sendBtn" onclick="sendEmail()">Send Emails</button>
+    <script>
+      async function sendEmail() {
+        const sendBtn = document.getElementById("sendBtn");
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Sending...";
 
-<script>
+        const emails = document
+          .getElementById("emails")
+          .value.split(",")
+          .map((email) => email.trim())
+          .filter(Boolean);
+        const subject = document.getElementById("subject").value;
+        const html = document.getElementById("html").value;
 
-async function sendEmail(){
-const sendBtn=document.getElementById("sendBtn");
-sendBtn.disabled=true;
-sendBtn.textContent="Sending...";
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-const emails=document.getElementById("emails").value
-  .split(",")
-  .map(email => email.trim())
-  .filter(Boolean);
-const subject=document.getElementById("subject").value;
-const html=document.getElementById("html").value;
+          const response = await fetch("/send-emails", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+              emails,
+              subject,
+              html,
+            }),
+          });
+          clearTimeout(timeoutId);
 
-try {
-const controller=new AbortController();
-const timeoutId=setTimeout(() => controller.abort(), 30000);
-
-const response=await fetch("/send-emails",{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-signal:controller.signal,
-body:JSON.stringify({
-emails,
-subject,
-html
-})
-});
-clearTimeout(timeoutId);
-
-const data=await response.json();
-if(!response.ok){
-throw new Error(data.message || "Request failed");
-}
-alert(data.message);
-} catch(error){
-if(error.name === "AbortError"){
-alert("Request timed out. Check Railway logs for SMTP issue.");
-} else {
-alert(error.message || "Unable to send emails");
-}
-} finally {
-sendBtn.disabled=false;
-sendBtn.textContent="Send Emails";
-}
-
-}
-
-</script>
-
-</body>
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.message || "Request failed");
+          }
+          alert(data.message);
+        } catch (error) {
+          if (error.name === "AbortError") {
+            alert("Request timed out. Check Railway logs for SMTP issue.");
+          } else {
+            alert(error.message || "Unable to send emails");
+          }
+        } finally {
+          sendBtn.disabled = false;
+          sendBtn.textContent = "Send Emails";
+        }
+      }
+    </script>
+  </body>
 </html>
